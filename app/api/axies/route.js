@@ -11,23 +11,22 @@ export async function POST(request) {
 
     const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
 
-    // Query mejorada: Quitamos filtros y pedimos el conteo total
     const query = `
       query GetAxieBriefList($owner: String!) {
         axies(owner: $owner, from: 0, size: 100) {
-          total
           results {
             id
             name
             image
             class
             stats { hp speed skill morale }
-            parts { id name class type stage }
+            parts { id name class type stage abilities { id name attack defense description } }
           }
         }
       }
     `;
 
+    // Probamos con la URL de Mainnet oficial para Developers
     const response = await fetch('https://api-gateway.skymavis.com/graphql/mainnet', {
       method: 'POST',
       headers: {
@@ -42,19 +41,24 @@ export async function POST(request) {
 
     const resData = await response.json();
     
-    // Verificamos qué está llegando exactamente en los logs de Netlify
-    console.log("Consulta para:", cleanAddress);
-    console.log("Datos crudos de Sky Mavis:", JSON.stringify(resData.data?.axies));
+    // LOG DE SEGURIDAD: Esto nos dirá la estructura real en Netlify
+    console.log("Estructura completa recibida:", JSON.stringify(resData).substring(0, 200));
 
+    // Si Sky Mavis responde con un error de API Key o cuota
     if (resData.errors) {
+      console.error("Error de Sky Mavis:", resData.errors[0].message);
       return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
     }
 
-    // Si el total es 0, enviamos un array vacío pero ya sabemos que la conexión es OK
-    return NextResponse.json(resData.data?.axies?.results || []);
+    // Navegamos por el objeto con seguridad (Optional Chaining)
+    const axies = resData.data?.axies?.results || resData.axies?.results || [];
+    
+    console.log(`Encontrados ${axies.length} axies para ${cleanAddress}`);
+
+    return NextResponse.json(axies);
 
   } catch (error) {
-    console.error("Error en servidor:", error.message);
+    console.error("ERROR EN SERVIDOR:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
