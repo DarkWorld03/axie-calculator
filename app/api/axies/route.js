@@ -5,17 +5,15 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const address = body.address;
+    const { address, axieId } = body;
+    const apiKey = process.env.AXIE_API_KEY?.trim();
 
-    if (!address) return NextResponse.json({ error: "No address" }, { status: 400 });
-
-    const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
-
-    const query = `
-      query GetAxieBriefList($owner: String!) {
-        axies(owner: $owner, from: 0, size: 100) {
-          total
-          results {
+    // --- CASO 1: BUSCAR POR ID INDIVIDUAL ---
+    if (axieId) {
+      console.log(`Buscando Axie por ID: ${axieId}`);
+      const queryById = `
+        query GetAxieDetail($axieId: String!) {
+          axie(axieId: $axieId) {
             id
             name
             image
@@ -27,39 +25,72 @@ export async function POST(request) {
             }
           }
         }
-      }
-    `;
+      `;
 
-    // URL SACADA DE TU TABLA:
-    const response = await fetch('https://api-gateway.skymavis.com/graphql/axie-marketplace', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'x-api-key': process.env.AXIE_API_KEY?.trim()
-      },
-      body: JSON.stringify({
-        query,
-        variables: { owner: cleanAddress }
-      }),
-    });
+      const response = await fetch('https://api-gateway.skymavis.com/graphql/axie-marketplace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          query: queryById,
+          variables: { axieId: axieId.toString() }
+        }),
+      });
 
-    const resData = await response.json();
-    
-    // Si hay errores de GraphQL los mostramos
-    if (resData.errors) {
-      console.error("Error Sky Mavis:", resData.errors[0].message);
-      return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
+      const resData = await response.json();
+      if (resData.errors) throw new Error(resData.errors[0].message);
+      return NextResponse.json(resData.data?.axie || null);
     }
 
-    // Extraemos los resultados
-    const axies = resData.data?.axies?.results || [];
-    console.log(`Consulta exitosa. Axies encontrados: ${axies.length}`);
+    // --- CASO 2: BUSCAR POR WALLET (INVENTARIO) ---
+    if (address) {
+      const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
+      console.log(`Consultando inventario para: ${cleanAddress}`);
 
-    return NextResponse.json(axies);
+      const queryByWallet = `
+        query GetAxieBriefList($owner: String!) {
+          axies(owner: $owner, from: 0, size: 100) {
+            results {
+              id
+              name
+              image
+              class
+              stats { hp speed skill morale }
+              parts { 
+                id name class type stage 
+                abilities { id name attack defense description } 
+              }
+            }
+          }
+        }
+      `;
+
+      const response = await fetch('https://api-gateway.skymavis.com/graphql/axie-marketplace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          query: queryByWallet,
+          variables: { owner: cleanAddress }
+        }),
+      });
+
+      const resData = await response.json();
+      if (resData.errors) throw new Error(resData.errors[0].message);
+      
+      const axies = resData.data?.axies?.results || [];
+      console.log(`Éxito. Axies encontrados: ${axies.length}`);
+      return NextResponse.json(axies);
+    }
+
+    return NextResponse.json({ error: "No se proporcionó address ni axieId" }, { status: 400 });
 
   } catch (error) {
-    console.error("ERROR CRITICO:", error.message);
+    console.error("ERROR EN SERVIDOR:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
