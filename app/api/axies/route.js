@@ -6,44 +6,47 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const address = body.address;
+    const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
 
-    if (!address) {
-      return NextResponse.json({ error: "Address missing" }, { status: 400 });
-    }
+    // Imprimir en el log de Netlify para ver si la dirección llega bien
+    console.log("Intentando buscar axies para:", cleanAddress);
 
-    const cleanAddress = address.toLowerCase().replace("ronin:", "0x");
-
-    // Query en una sola línea para evitar errores de parseo de caracteres invisibles
-    const query = "query GetAxieBriefList($owner: String!) { axies(owner: $owner, from: 0, size: 24) { results { id name image class stats { hp speed skill morale } parts { id name class type stage } } } }";
+    const query = `query GetAxieBriefList($owner: String!) {
+      axies(owner: $owner, from: 0, size: 24) {
+        results {
+          id
+          name
+          image
+          class
+        }
+      }
+    }`;
 
     const response = await fetch('https://graphql-gateway.axieinfinity.com/graphql', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.AXIE_API_KEY
+        'x-api-key': process.env.AXIE_API_KEY?.trim()
       },
       body: JSON.stringify({
-        query: query,
+        query,
         variables: { owner: cleanAddress }
       }),
     });
 
     const resData = await response.json();
 
-    // Verificación profunda del error
     if (resData.errors) {
-      console.error("Detalle del error Sky Mavis:", resData.errors);
-      return NextResponse.json({ 
-        error: "GraphQL Error", 
-        message: resData.errors[0].message 
-      }, { status: 400 });
+      // ESTO ES LO QUE NECESITAMOS VER EN EL LOG
+      console.error("DETALLE ERROR SKY MAVIS:", JSON.stringify(resData.errors));
+      return NextResponse.json({ error: "Error de API" }, { status: 400 });
     }
 
-    const results = resData.data?.axies?.results || [];
-    return NextResponse.json(results);
+    console.log("Axies encontrados:", resData.data?.axies?.results?.length || 0);
+    return NextResponse.json(resData.data?.axies?.results || []);
 
   } catch (error) {
-    console.error("Error en servidor Netlify:", error);
+    console.error("ERROR CRITICO:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
