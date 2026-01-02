@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic'; // Esto evita que Netlify guarde datos viejos
+export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const address = body.address || body.variables?.address; // Doble verificación de la wallet
+    let address = body.address || body.variables?.address;
 
     if (!address) {
-      return NextResponse.json({ error: "No wallet address provided" }, { status: 400 });
+      return NextResponse.json({ error: "No address provided" }, { status: 400 });
     }
 
+    // ASEGURAR FORMATO 0x: La API interna de Sky Mavis a veces falla con "ronin:"
+    const cleanAddress = address.toLowerCase().replace("ronin:", "0x");
+
     const query = `
-      query GetAxieBriefList($owner: String) {
+      query GetAxieBriefList($owner: String!) {
         axies(owner: $owner, from: 0, size: 24) {
           results {
             id
@@ -34,24 +37,23 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         query,
-        variables: { owner: address } // Cambié $address por $owner para que coincida con la query
+        variables: { owner: cleanAddress } 
       }),
     });
 
     const resData = await response.json();
 
-    // Si Sky Mavis responde con errores dentro del JSON
+    // Si hay errores de GraphQL, los enviamos para ver qué dicen
     if (resData.errors) {
-      console.error("GraphQL Errors:", resData.errors);
-      return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
+      return NextResponse.json({ 
+        error: "Sky Mavis Error", 
+        details: resData.errors 
+      }, { status: 400 });
     }
 
-    // Retornamos los resultados o un array vacío si no hay nada
-    const axies = resData.data?.axies?.results || [];
-    return NextResponse.json(axies);
+    return NextResponse.json(resData.data?.axies?.results || []);
 
   } catch (error) {
-    console.error("Critical API Error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
