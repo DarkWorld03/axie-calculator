@@ -5,11 +5,17 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const address = body.address;
-    const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
+    
+    // Intentamos leer la dirección de varias formas posibles
+    const address = body.address || body.variables?.address || body.owner;
 
-    // Imprimir en el log de Netlify para ver si la dirección llega bien
-    console.log("Intentando buscar axies para:", cleanAddress);
+    if (!address) {
+      console.error("ERROR: No llegó ninguna dirección en el body:", body);
+      return NextResponse.json({ error: "No wallet address provided" }, { status: 400 });
+    }
+
+    const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
+    console.log("Dirección procesada correctamente:", cleanAddress);
 
     const query = `query GetAxieBriefList($owner: String!) {
       axies(owner: $owner, from: 0, size: 24) {
@@ -18,6 +24,7 @@ export async function POST(request) {
           name
           image
           class
+          parts { id name class type stage }
         }
       }
     }`;
@@ -37,16 +44,14 @@ export async function POST(request) {
     const resData = await response.json();
 
     if (resData.errors) {
-      // ESTO ES LO QUE NECESITAMOS VER EN EL LOG
-      console.error("DETALLE ERROR SKY MAVIS:", JSON.stringify(resData.errors));
-      return NextResponse.json({ error: "Error de API" }, { status: 400 });
+      console.error("SKY MAVIS ERROR:", JSON.stringify(resData.errors));
+      return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
     }
 
-    console.log("Axies encontrados:", resData.data?.axies?.results?.length || 0);
     return NextResponse.json(resData.data?.axies?.results || []);
 
   } catch (error) {
-    console.error("ERROR CRITICO:", error.message);
+    console.error("ERROR CRITICO EN ROUTE:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
