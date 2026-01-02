@@ -11,10 +11,10 @@ export async function POST(request) {
 
     const cleanAddress = address.toLowerCase().trim().replace("ronin:", "0x");
 
-    // Query oficial para la API de Desarrolladores
+    // Query mejorada: Quitamos filtros y pedimos el conteo total
     const query = `
       query GetAxieBriefList($owner: String!) {
-        axies(owner: $owner, from: 0, size: 24) {
+        axies(owner: $owner, from: 0, size: 100) {
           total
           results {
             id
@@ -32,7 +32,6 @@ export async function POST(request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
         'x-api-key': process.env.AXIE_API_KEY?.trim()
       },
       body: JSON.stringify({
@@ -42,15 +41,16 @@ export async function POST(request) {
     });
 
     const resData = await response.json();
-
-    // Log para ver en Netlify si vienen datos
-    console.log("Respuesta de Sky Mavis recibida. Total:", resData.data?.axies?.total || 0);
+    
+    // Verificamos qué está llegando exactamente en los logs de Netlify
+    console.log("Consulta para:", cleanAddress);
+    console.log("Datos crudos de Sky Mavis:", JSON.stringify(resData.data?.axies));
 
     if (resData.errors) {
       return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
     }
 
-    // Enviamos solo el array de resultados
+    // Si el total es 0, enviamos un array vacío pero ya sabemos que la conexión es OK
     return NextResponse.json(resData.data?.axies?.results || []);
 
   } catch (error) {
