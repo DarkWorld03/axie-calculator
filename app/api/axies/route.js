@@ -12,7 +12,7 @@ export async function POST(request) {
     if (axieId) {
       console.log(`Buscando Axie por ID: ${axieId}`);
       const queryById = `
-        query GetAxieDetail($axieId: String!) {
+        query GetAxieDetail($axieId: ID!) {
           axie(axieId: $axieId) {
             id
             name
