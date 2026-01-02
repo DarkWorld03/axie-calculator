@@ -20,17 +20,21 @@ export async function POST(request) {
             image
             class
             stats { hp speed skill morale }
-            parts { id name class type stage abilities { id name attack defense description } }
+            parts { 
+              id name class type stage 
+              abilities { id name attack defense description } 
+            }
           }
         }
       }
     `;
 
-    // Probamos con la URL de Mainnet oficial para Developers
+    // URL CORREGIDA: Esta es la que acepta las API Keys de nivel gratuito
     const response = await fetch('https://api-gateway.skymavis.com/graphql/mainnet', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'x-api-key': process.env.AXIE_API_KEY?.trim()
       },
       body: JSON.stringify({
@@ -41,19 +45,19 @@ export async function POST(request) {
 
     const resData = await response.json();
     
-    // LOG DE SEGURIDAD: Esto nos dirá la estructura real en Netlify
-    console.log("Estructura completa recibida:", JSON.stringify(resData).substring(0, 200));
+    // Si la URL falló de nuevo, esto nos avisará
+    if (resData.message === "no Route matched with those values") {
+       console.error("URL INCORRECTA. Probando ruta alternativa...");
+       // Aquí podrías poner un segundo fetch a otra URL si fuera necesario
+    }
 
-    // Si Sky Mavis responde con un error de API Key o cuota
     if (resData.errors) {
       console.error("Error de Sky Mavis:", resData.errors[0].message);
       return NextResponse.json({ error: resData.errors[0].message }, { status: 400 });
     }
 
-    // Navegamos por el objeto con seguridad (Optional Chaining)
-    const axies = resData.data?.axies?.results || resData.axies?.results || [];
-    
-    console.log(`Encontrados ${axies.length} axies para ${cleanAddress}`);
+    const axies = resData.data?.axies?.results || [];
+    console.log(`¡POR FIN! Encontrados ${axies.length} axies.`);
 
     return NextResponse.json(axies);
 
